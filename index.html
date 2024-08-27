@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess-like Game</title>
+    <style>
+        .game-board {
+            display: grid;
+            grid-template-columns: repeat(5, 50px);
+            grid-gap: 1px;
+            background-color: #ccc;
+        }
+        .cell {
+            width: 50px;
+            height: 50px;
+            background-color: white;
+            border: 1px solid #999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+        }
+        .move-options {
+            margin-top: 20px;
+        }
+        .move-button {
+            margin-right: 10px;
+        }
+        .selected {
+            background-color: yellow;
+        }
+    </style>
+</head>
+<body>
+    <h1>Chess-like Game</h1>
+    <div id="gameBoard" class="game-board"></div>
+    <div id="moveOptions" class="move-options"></div>
+    <div id="turnIndicator"></div>
+    <div id="moveHistory"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let selectedPiece = null;
+        let currentPlayer = 'A';
+
+        function createBoard() {
+            const gameBoard = document.getElementById('gameBoard');
+            for (let i = 0; i < 25; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.dataset.index = i;
+                cell.addEventListener('click', handleCellClick);
+                gameBoard.appendChild(cell);
+            }
+        }
+
+        function handleCellClick(event) {
+            const cellIndex = parseInt(event.target.dataset.index);
+            const piece = event.target.textContent;
+            
+            if (piece.startsWith(currentPlayer)) {
+                selectPiece(piece, cellIndex);
+            } else if (selectedPiece) {
+                makeMove(selectedPiece, cellIndex);
+            }
+        }
+
+        function selectPiece(piece, index) {
+            selectedPiece = { piece, index };
+            highlightSelectedPiece(index);
+            showMoveOptions(piece);
+        }
+
+        function highlightSelectedPiece(index) {
+            const cells = document.getElementsByClassName('cell');
+            for (let cell of cells) {
+                cell.classList.remove('selected');
+            }
+            cells[index].classList.add('selected');
+        }
+
+        function showMoveOptions(piece) {
+            const moveOptions = document.getElementById('moveOptions');
+            moveOptions.innerHTML = '';
+            
+            const moves = getMoves(piece);
+            moves.forEach(move => {
+                const button = document.createElement('button');
+                button.textContent = move;
+                button.className = 'move-button';
+                button.addEventListener('click', () => makeMove(selectedPiece, move));
+                moveOptions.appendChild(button);
+            });
+        }
+
+        function getMoves(piece) {
+            const type = piece.charAt(2);
+            switch(type) {
+                case 'P': return ['L', 'R', 'F', 'B'];
+                case '1': return ['L', 'R', 'F', 'B'];
+                case '2': return ['FL', 'FR', 'BL', 'BR'];
+                case '3': return ['FL', 'FR', 'BL', 'BR', 'RF', 'RB', 'LF', 'LB'];
+                default: return [];
+            }
+        }
+
+        function makeMove(selectedPiece, move) {
+            if (typeof move === 'number') {
+                // If move is a cell index, calculate the move direction
+                move = calculateMoveDirection(selectedPiece.index, move);
+            }
+            socket.emit('move', { piece: selectedPiece.piece, index: selectedPiece.index, move });
+        }
+
+        function calculateMoveDirection(fromIndex, toIndex) {
+            const diff = toIndex - fromIndex;
+            if (diff === -1) return 'L';
+            if (diff === 1) return 'R';
+            if (diff === -5) return 'F';
+            if (diff === 5) return 'B';
+            if (diff === -6) return 'FL';
+            if (diff === -4) return 'FR';
+            if (diff === 4) return 'BL';
+            if (diff === 6) return 'BR';
+            return null;
+        }
+
+        socket.on('gameState', (state) => {
+            updateBoard(state.board);
+            currentPlayer = state.currentPlayer;
+            document.getElementById('turnIndicator').textContent = `Current Turn: Player ${currentPlayer}`;
+            updateMoveHistory(state.moveHistory);
+            selectedPiece = null;
+            document.getElementById('moveOptions').innerHTML = '';
+        });
+
+        function updateBoard(board) {
+            const cells = document.getElementsByClassName('cell');
+            for (let i = 0; i < cells.length; i++) {
+                cells[i].textContent = board[i] || '';
+                cells[i].classList.remove('selected');
+            }
+        }
+
+        function updateMoveHistory(history) {
+            const moveHistory = document.getElementById('moveHistory');
+            moveHistory.innerHTML = '<h3>Move History:</h3>' + history.map(move => `<p>${move}</p>`).join('');
+        }
+
+        createBoard();
+    </script>
+</body>
+</html>
